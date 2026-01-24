@@ -1,0 +1,48 @@
+services:
+  mongodb:
+    image: mongo:latest
+    container_name: fact_checker_mongodb
+    ports:
+      - "27017:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: "FC-DB-ROOT"
+      MONGO_INITDB_ROOT_PASSWORD: "CHANGE-ME-ROOT"
+    volumes:
+      - mongodb_data:/data/db
+      - mongodb_config:/data/configdb
+      - ./mongo-init.js:/docker-entrypoint-initdb.d/init.js
+    command: mongod --bind_ip 0.0.0.0 --auth
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    networks:
+      - fact_checker_network
+
+  mongo-express:
+    image: mongo-express:latest
+    container_name: fact_checker_mongo_express
+    ports:
+      - "8081:8081"
+    environment:
+      ME_CONFIG_MONGODB_ADMINUSERNAME: "FC-DB-ROOT"
+      ME_CONFIG_MONGODB_ADMINPASSWORD: "CHANGE-ME-ROOT"
+      ME_CONFIG_MONGODB_URL: "mongodb://FC-DB-ROOT:CHANGE-ME-ROOT@mongodb:27017"
+      ME_CONFIG_BASICAUTH: "true"
+      ME_CONFIG_BASICAUTH_USERNAME: "FC-DB-ADMIN"
+      ME_CONFIG_BASICAUTH_PASSWORD: "CHANGE-ME-ADMIN"
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - fact_checker_network
+
+volumes:
+  mongodb_data:
+  mongodb_config:
+
+networks:
+  fact_checker_network:
+    driver: bridge

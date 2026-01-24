@@ -1,0 +1,17 @@
+#MongoDB configuration
+mongodb_uri: "mongodb://localhost:27017"
+mongodb_db: "fact_checker"
+mongodb_collection: "embeddings"
+mongodb_username: "FC-DB-ADMIN"
+mongodb_password: "CHANGE-ME-ADMIN"
+mongodb_auth_db: "admin" 
+
+# Model configuration
+embeddings_model: "nomic-embed-text-v2-moe"
+
+# Document loader and chunking configuration
+file_path: "./datasets"
+batch_size: 100000
+chunk_size: 8000
+chunk_overlap: 200
+buffer_chunks: 5000
