@@ -29,6 +29,7 @@ def load_documents(data_path: str):
     documents.extend(csv_documents)
     print(f"Loaded {len(csv_documents)} CSV documents.")
 
+    '''
     # JSONL files
     print("Loading JSONL documents...")
     loader_kwargs = {
@@ -47,7 +48,8 @@ def load_documents(data_path: str):
     jsonl_documents = loader.load()
     documents.extend(jsonl_documents)
     print(f"Loaded {len(jsonl_documents)} JSONL documents.")
-
+    '''
+    
     if len(documents) == 0:
         raise FileNotFoundError("No documents found in the specified directory.")
     print(f"Total loaded: {len(documents)} documents.")
