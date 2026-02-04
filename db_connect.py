@@ -2,7 +2,7 @@ import yaml
 from pymongo import MongoClient
 from urllib.parse import quote_plus
 
-with open("config.yaml", "r") as file:
+with open("config/config.yaml", "r") as file:
     config = yaml.safe_load(file)
 
 

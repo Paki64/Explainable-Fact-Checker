@@ -3,7 +3,7 @@ from pymongo import MongoClient
 from urllib.parse import quote_plus
 from db_connect import db_connect
 
-with open("config.yaml", "r") as file:
+with open("config/config.yaml", "r") as file:
     config = yaml.safe_load(file)
 
 # Connect to MongoDB

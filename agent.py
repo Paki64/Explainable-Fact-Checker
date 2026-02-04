@@ -7,8 +7,11 @@ from langchain_ollama import OllamaEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
 from db_connect import db_connect
 
-with open("config.yaml", "r") as file:
+with open("config/config.yaml", "r") as file:
     config = yaml.safe_load(file)
+
+with open("config/prompt.yaml", "r") as file:
+    prompt = yaml.safe_load(file)
 
 
 # Calcolo della similarità coseno tra due vettori
@@ -53,29 +56,7 @@ def retrieve_relevant_info(question: str, min_score: float = 0.35, top_k: int = 
 
 # Configurazione del modello LLM e del prompt
 model = OllamaLLM(model=config["llm_model"])
-template = """
-Sei un fact-checker esperto. Il tuo compito è verificare se un'affermazione è vera, falsa o senza fonte.
-
-CRITERI RIGOROSI:
-1. NESSUN articolo trovato O Relevance Score < 0.35 per TUTTI gli articoli → SENZA FONTE
-2. Articoli rilevanti contraddicono l'affermazione → FALSO
-3. Articoli rilevanti NON supportano l'affermazione → FALSO
-4. SOLO se articoli rilevanti supportano CHIARAMENTE → VERO
-
-Articoli dal database:
-{info}
-
-Affermazione: {question}
-
-RISPOSTA OBBLIGATORIA (SOLO JSON):
-{{"verdict":"VERO","explanation":"spiegazione..."}}
-oppure
-{{"verdict":"FALSO","explanation":"spiegazione..."}}
-oppure
-{{"verdict":"SENZA FONTE","explanation":"Non sono disponibili fonti rilevanti per verificare questa affermazione."}}
-
-Il campo "verdict" NON può essere vuoto.
-"""
+template = prompt["template"]
 prompt = ChatPromptTemplate.from_template(template)
 chain = prompt | model
 
@@ -195,9 +176,9 @@ while True:
         print("Alla prossima!\n")
         break
     
+    print("\nAnalisi in corso...\n")
     relevant_articles = retrieve_relevant_info(question)    
     formatted_info = format_articles_for_llm(relevant_articles)
-    print("\nAnalisi in corso...\n")
     
     if not relevant_articles:
         verdict = "SENZA FONTE" # Verdetto fallback

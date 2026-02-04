@@ -8,7 +8,7 @@ from pathlib import Path
 from db_connect import db_connect
 
 
-with open("config.yaml", "r") as file:
+with open("config/config.yaml", "r") as file:
     config = yaml.safe_load(file)
 
 
