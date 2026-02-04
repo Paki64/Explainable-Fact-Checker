@@ -1,5 +1,6 @@
 .venv/
 datasets/*
+tmp
 chroma_db/*
 .env
 .DS_Store

@@ -8,10 +8,9 @@ mongodb_auth_db: "admin"
 
 # Model configuration
 embeddings_model: "nomic-embed-text-v2-moe"
+llm_model: "llama3.2:3B"
 
 # Document loader and chunking configuration
 file_path: "./datasets"
-batch_size: 50
-chunk_size: 8000
-chunk_overlap: 200
-buffer_chunks: 5000
+chunk_size: 12000
+chunk_overlap: 500

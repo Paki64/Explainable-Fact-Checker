@@ -1,136 +1,126 @@
 import yaml
-from langchain_community.document_loaders import CSVLoader, DirectoryLoader, JSONLoader
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.documents import Document
 from langchain_ollama import OllamaEmbeddings
-from pymongo import MongoClient
 from tqdm import tqdm
 import json
-from urllib.parse import quote_plus
+from pathlib import Path
+from db_connect import db_connect
 
 
 with open("config.yaml", "r") as file:
     config = yaml.safe_load(file)
 
 
+# Normalizzazione testo
+def _normalize_text(value):
+
+    # Rimuovi spazi bianchi nelle stringhe
+    if isinstance(value, str):
+        return value.strip() 
+    
+    # Unisci elementi di lista in una singola stringa
+    if isinstance(value, list):
+        parts = [v for v in value if isinstance(v, str) and v.strip()]
+        return "\n".join(parts).strip() if parts else ""
+    
+    return ""
+
+
+# Estrai testo in base a chiavi comuni
+def _extract_text(row: dict) -> str:
+    
+    for key in ("text", "content", "body", "article", "claim", "question", "url2text", "lines"):
+        text = _normalize_text(row.get(key))
+        if text:
+            return text
+        
+    return ""
+
+
+# Carica documenti da file JSON
 def load_documents(data_path: str):
-
     documents = []
+    json_files = sorted(Path(data_path).rglob("*.json"))
     
-    # CSV files
-    print("Loading CSV documents...")
-    loader = DirectoryLoader(
-        path=data_path,
-        glob="**/*.csv",
-        loader_cls=CSVLoader,
-        show_progress=True,
-    )
-    csv_documents = loader.load()
-    documents.extend(csv_documents)
-    print(f"Loaded {len(csv_documents)} CSV documents.")
+    for json_file in tqdm(json_files, desc="Loading JSON files"):
+        try:
+            with open(json_file, "r", encoding="utf-8") as f:
+                content = f.read()
+                # Prova a caricare come JSON completo o come linee JSON in base al formato del file
+                try:
+                    data = json.loads(content)
+                    rows = data if isinstance(data, list) else [data]
+                except json.JSONDecodeError:
+                    rows = [json.loads(line) for line in content.splitlines() if line.strip()]
+                # Estrai testo da ogni riga
+                for row in rows:
+                    if not isinstance(row, dict):
+                        continue
+                    text = _extract_text(row)
+                    if not text:
+                        continue
+                    # Aggiunta dei metadati
+                    metadata = {"url": row.get("url", "")}
+                    documents.append(Document(page_content=text, metadata=metadata))
+        except Exception as e:
+            print(f"Error loading {json_file}: {e}")
 
-    '''
-    # JSONL files
-    print("Loading JSONL documents...")
-    loader_kwargs = {
-        "jq_schema": ".",          
-        "content_key": "text",     
-        "json_lines": True,        
-        "text_content": True       
-    }
-    loader = DirectoryLoader(
-        path=data_path,
-        glob="**/*.jsonl",         
-        loader_cls=JSONLoader,
-        loader_kwargs=loader_kwargs,
-        show_progress=True        
-    )
-    jsonl_documents = loader.load()
-    documents.extend(jsonl_documents)
-    print(f"Loaded {len(jsonl_documents)} JSONL documents.")
-    '''
+    # Eccezione se nessun documento trovato
+    if not documents:
+        raise FileNotFoundError("No documents found.")
     
-    if len(documents) == 0:
-        raise FileNotFoundError("No documents found in the specified directory.")
-    print(f"Total loaded: {len(documents)} documents.")
+    print(f"Loaded {len(documents)} documents.")
     return documents
 
 
+# Suddivisione dei documenti in chunk
 def split_documents(documents):
 
-    batch_size = config["batch_size"]
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=config["chunk_size"],
         chunk_overlap=config["chunk_overlap"],
         separators=["\n\n---\n\n", "\n\n", "\n", " ", ""],
         length_function=len,
     )
+
     all_chunks = []
-    for i in range(0, len(documents), batch_size):
-        batch = documents[i:i+batch_size]
-        combined_text = "\n\n---\n\n".join([doc.page_content for doc in batch])
-        chunk_texts = text_splitter.split_text(combined_text)
-        batch_chunks = [Document(page_content=chunk) for chunk in chunk_texts]
-        all_chunks.extend(batch_chunks)
-        del combined_text, chunk_texts, batch_chunks
+    for doc in tqdm(documents, desc="Splitting documents"):
+        chunk_texts = text_splitter.split_text(doc.page_content)
+        for chunk_text in chunk_texts:
+            all_chunks.append(Document(page_content=chunk_text, metadata=doc.metadata.copy()))
 
-    chunks = all_chunks
-    print(f"Document split into {len(chunks)} chunks.")
-    return chunks
+    print(f"Split into {len(all_chunks)} chunks.")
+    return all_chunks
 
 
-def db_connect():
-    print("Connecting to MongoDB...")
-
-    uri = config["mongodb_uri"]
-    username = config.get("mongodb_username", "")
-    password = config.get("mongodb_password", "")
-    auth_db = config.get("mongodb_auth_db", "admin")
-    
-    if username and password:
-        escaped_username = quote_plus(username)
-        escaped_password = quote_plus(password)
-        uri = uri.replace("mongodb://", f"mongodb://{escaped_username}:{escaped_password}@")
-        client = MongoClient(uri, authSource=auth_db, serverSelectionTimeoutMS=5000)
-    else:
-        client = MongoClient(uri, serverSelectionTimeoutMS=5000)
-    
-    try:
-        client.admin.command('ping')
-        print("Connected to MongoDB.")
-    except Exception as e:
-        print(f"Failed to connect to MongoDB: {e}")
-        print("Check your credentials and MongoDB is running")
-        raise
-    
-    db = client[config["mongodb_db"]]
-    collection = db[config["mongodb_collection"]]
-    return collection
-
-
+# Creazione del database vettoriale e caricamento degli embeddings su DB
 def create_vector(chunks):
 
-    print("Creating vector store...")
     embeddings = OllamaEmbeddings(model=config["embeddings_model"])
     collection = db_connect()
-    
-    embedded_chunks = []
-    with tqdm(total=len(chunks), desc="Embedding chunks", unit="chunk") as pbar:
-        for chunk in chunks:
-            embedding = embeddings.embed_query(chunk.page_content)
-            
-            doc = {
-                "content": chunk.page_content,
-                "embedding": embedding,
-                "metadata": chunk.metadata if hasattr(chunk, 'metadata') else {}
-            }
-            
-            collection.insert_one(doc)
-            embedded_chunks.append(chunk)
-            pbar.update(1)
-    
-    print(f"Vector DB created with {len(embedded_chunks)} chunks in MongoDB")
+    batch_size = config.get("batch_size", 32)
+
+    with tqdm(total=len(chunks), desc="Embedding chunks") as pbar:
+        for start in range(0, len(chunks), batch_size):
+            batch = chunks[start : start + batch_size]
+            texts = [c.page_content for c in batch]
+            embeddings_batch = embeddings.embed_documents(texts)
+
+            docs = [
+                {
+                    "content": chunk.page_content,
+                    "embedding": embedding,
+                    "metadata": chunk.metadata,
+                }
+                for chunk, embedding in zip(batch, embeddings_batch)
+            ]
+            collection.insert_many(docs, ordered=False)
+            pbar.update(len(batch))
+
+    print(f"Created vector DB with {len(chunks)} chunks")
     return collection
+
 
 
 if __name__ == "__main__":
