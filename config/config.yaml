@@ -9,6 +9,7 @@ mongodb_auth_db: "admin"
 # Model configuration
 embeddings_model: "nomic-embed-text-v2-moe"
 llm_model: "llama3.2:3B"
+ollama_api_endpoint: "http://localhost:11434/api/generate"
 
 # Document loader and chunking configuration
 file_path: "./datasets"
