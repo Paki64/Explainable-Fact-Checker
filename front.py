@@ -1,10 +1,11 @@
 import streamlit as st
 import requests
 import os
-from dotenv import load_dotenv
+import yaml
 import json
 
-load_dotenv()
+with open("config/config.yaml", "r") as file:
+    config = yaml.safe_load(file)
 
 st.set_page_config(
     page_title="Fact Checker",
@@ -28,8 +29,8 @@ if st.button("Verifica", type="primary", use_container_width=True):
         st.warning("Inserisci una notizia prima di verificare")
     else:
         # Get configuration from environment
-        ollama_url = os.getenv("API_ENDPOINT")
-        model_name = os.getenv("MODEL")
+        ollama_url = config["ollama_api_endpoint"]
+        model_name = config["llm_model"]
 
         with st.spinner("Verifico la notizia..."):
             try:
@@ -119,8 +120,8 @@ Non aggiungere altro testo al di fuori del JSON."""
 with st.sidebar:
     st.header("⚙️ Configurazione")
 
-    current_url = os.getenv("API_ENDPOINT")
-    current_model =os.getenv("MODEL")
+    current_url = config["ollama_api_endpoint"]
+    current_model = config["llm_model"]
 
     st.markdown("**Endpoint API:**")
     st.code(current_url, language="text")
