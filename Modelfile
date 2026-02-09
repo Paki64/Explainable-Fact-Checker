@@ -1,0 +1,3 @@
+FROM nomic-embed-text-v2-moe
+
+PARAMETER num_ctx 16394
