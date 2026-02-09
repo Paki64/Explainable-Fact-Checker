@@ -55,7 +55,7 @@ def load_embeddings_cache():
     # Debug: controlla dimensioni
     num_docs = len(doc_ids)
     memory_mb = embeddings_matrix.nbytes / (1024 * 1024)
-        
+    
     # Salva nella cache globale
     _EMBEDDINGS_CACHE = {
         "doc_ids": doc_ids,

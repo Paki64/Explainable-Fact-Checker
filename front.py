@@ -1,9 +1,8 @@
 import streamlit as st
 import requests
-import os
 import yaml
-import json
 
+# Carica configurazioni
 with open("config/config.yaml", "r") as file:
     config = yaml.safe_load(file)
 
@@ -26,124 +25,119 @@ news_text = st.text_area(
 # Submit button
 if st.button("Verifica", type="primary", use_container_width=True):
     if not news_text.strip():
-        st.warning("Inserisci una notizia prima di verificare")
+        st.warning("⚠️ Inserisci una notizia prima di verificare")
     else:
-        # Get configuration from environment
-        ollama_url = config["ollama_api_endpoint"]
-        model_name = config["llm_model"]
-
-        with st.spinner("Verifico la notizia..."):
+        # ✅ Chiama il TUO agent (non Ollama direttamente)
+        agent_url = config.get("agent_api_endpoint")
+        
+        with st.spinner("🔍 Verifico la notizia..."):
             try:
-                # Create prompt for fact-checking
-                prompt = f"""Sei un sistema di fact-checking. Analizza la seguente notizia e determina se è vera o falsa. cita le tue fonti se possibile.
-
-Notizia: {news_text}
-
-Rispondi SOLO in formato JSON con questa struttura:
-{{
-  "verdict": "true" oppure "false",
-  "explanation": "spiegazione dettagliata"
-}}
-
-Non aggiungere altro testo al di fuori del JSON."""
-
-                # Make API call to Ollama
+                # Chiamata all'API del tuo agent
                 response = requests.post(
-                    ollama_url,
-                    json={
-                        "model": model_name,
-                        "prompt": prompt,
-                        "stream": False
-                    },
-                    timeout=60
+                    agent_url,
+                    json={"question": news_text},
+                    timeout=500  
                 )
                 response.raise_for_status()
-
-                # Parse Ollama response
-                ollama_result = response.json()
-                llm_response = ollama_result.get("response", "")
-
-                # Try to parse JSON from LLM response
-                try:
-                    # Find JSON in response
-                    start_idx = llm_response.find("{")
-                    end_idx = llm_response.rfind("}") + 1
-                    if start_idx != -1 and end_idx > start_idx:
-                        json_str = llm_response[start_idx:end_idx]
-                        result = json.loads(json_str)
-                    else:
-                        raise ValueError("No JSON found in response")
-
-                    verdict = result.get("verdict", "").lower()
-                    explanation = result.get("explanation", "Nessuna spiegazione fornita")
-
-                except (json.JSONDecodeError, ValueError):
-                    # Fallback: analyze response text
-                    st.warning("⚠️ Impossibile parsare la risposta strutturata")
-                    st.write("**Risposta del modello:**")
-                    st.write(llm_response)
-                    verdict = None
-
-                # Display result with colored banner
-                if verdict:
-                    if verdict in ["true", "vera", "vero", "verified"]:
-                        #st.success("✅ NOTIZIA VERIFICATA COME VERA")
-                        st.markdown(f"""
-                        <div style="background-color: #d4edda; padding: 20px; border-radius: 10px; border-left: 5px solid #28a745;">
-                            <h3 style="color: #155724; margin-top: 0;">Verdetto: ✓ VERA</h3>
-                            <p style="color: #155724; margin-bottom: 0;">{explanation}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    elif verdict in ["false", "falsa", "falso", "fake"]:
-                        #st.error("❌ NOTIZIA VERIFICATA COME FALSA")
-                        st.markdown(f"""
-                        <div style="background-color: #f8d7da; padding: 20px; border-radius: 10px; border-left: 5px solid #dc3545;">
-                            <h3 style="color: #721c24; margin-top: 0;">Verdetto: ✗ FALSA</h3>
-                            <p style="color: #721c24; margin-bottom: 0;">{explanation}</p>
-                        </div>
-                        """, unsafe_allow_html=True)
-                    else:
-                        st.info(f"ℹ️ Verdetto: {verdict}")
-                        st.write(explanation)
-
+                
+                # Parse della risposta strutturata
+                result = response.json()
+                verdict = result.get("verdict", "").upper()
+                explanation = result.get("explanation", "Nessuna spiegazione fornita")
+                sources = result.get("sources", [])
+                processing_time = result.get("processing_time", 0)
+                
+                # Display result con banner colorato
+                if verdict == "VERO":
+                    st.markdown(f"""
+                    <div style="background-color: #d4edda; padding: 20px; border-radius: 10px; border-left: 5px solid #28a745;">
+                        <h3 style="color: #155724; margin-top: 0;">✓ NOTIZIA VERA</h3>
+                        <p style="color: #155724; margin-bottom: 0;">{explanation}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                elif verdict == "FALSO":
+                    st.markdown(f"""
+                    <div style="background-color: #f8d7da; padding: 20px; border-radius: 10px; border-left: 5px solid #dc3545;">
+                        <h3 style="color: #721c24; margin-top: 0;">✗ NOTIZIA FALSA</h3>
+                        <p style="color: #721c24; margin-bottom: 0;">{explanation}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
+                elif verdict == "SENZA FONTE":
+                    st.markdown(f"""
+                    <div style="background-color: #fff3cd; padding: 20px; border-radius: 10px; border-left: 5px solid #ffc107;">
+                        <h3 style="color: #856404; margin-top: 0;">⚠️ SENZA FONTE</h3>
+                        <p style="color: #856404; margin-bottom: 0;">{explanation}</p>
+                    </div>
+                    """, unsafe_allow_html=True)
+                else:
+                    st.info(f"ℹ️ Verdetto: {verdict}")
+                    st.write(explanation)
+                
+                # Mostra fonti se presenti
+                if sources:
+                    st.markdown("---")
+                    st.subheader("📚 Fonti")
+                    for i, source in enumerate(sources, 1):
+                        url = source.get("url", "N/A")
+                        score = source.get("relevance_score", 0) * 100
+                        st.markdown(f"{i}. [{url}]({url}) - Rilevanza: **{score:.1f}%**")
+                
+                # Info timing (opzionale, per debug)
+                st.caption(f"⏱️ Tempo di elaborazione: {processing_time:.2f}s")
+                
             except requests.exceptions.Timeout:
-                st.error("❌ Timeout: il modello non ha risposto in tempo (aumenta il timeout se necessario)")
+                st.error("❌ Timeout: l'agent non ha risposto in tempo")
             except requests.exceptions.ConnectionError:
-                st.error("❌ Errore di connessione: verifica che Ollama sia in esecuzione")
-                st.code("ollama serve", language="bash")
+                st.error(f"❌ Impossibile connettersi all'agent su `{agent_url}`")
+                st.info("Verifica che l'agent sia in esecuzione e raggiungibile")
             except requests.exceptions.HTTPError as e:
-                st.error(f"❌ Errore HTTP: {e.response.status_code}")
+                st.error(f"❌ Errore HTTP {e.response.status_code}")
+                if e.response.text:
+                    st.code(e.response.text, language="json")
             except Exception as e:
                 st.error(f"❌ Errore imprevisto: {str(e)}")
 
 # Sidebar info
 with st.sidebar:
     st.header("⚙️ Configurazione")
-
-    current_url = config["ollama_api_endpoint"]
-    current_model = config["llm_model"]
-
-    st.markdown("**Endpoint API:**")
-    st.code(current_url, language="text")
-
-    st.markdown("**Modello in utilizzo:**")
-    st.code(current_model, language="text")
-
+    
+    agent_endpoint = config.get("agent_api_endpoint")
+    model_name = config.get("llm_model")
+    
+    st.markdown("**Endpoint Agent:**")
+    st.code(agent_endpoint, language="text")
+    
+    st.markdown("**Modello LLM:**")
+    st.code(model_name, language="text")
+    
+    # Health check (opzionale ma utile)
+    if st.button("🔌 Test Connessione"):
+        try:
+            health_response = requests.get(f"{agent_endpoint}/api/health", timeout=5)
+            if health_response.status_code == 200:
+                data = health_response.json()
+                st.success(f"✅ Agent attivo - {data.get('num_documents', 0)} documenti in cache")
+            else:
+                st.error("❌ Agent non risponde correttamente")
+        except:
+            st.error("❌ Agent non raggiungibile")
+    
     st.markdown("---")
-    st.header("ℹ️ Informazioni")
+    st.header("ℹ️ Come Funziona")
     st.markdown("""
-    Questo sistema utilizza Ollama per verificare 
-    la veridicità delle notizie.
-
-    **Come usare:**
-    1. Inserisci il testo della notizia
-    2. Clicca su "Verifica"
-    3. Attendi il verdetto
-                
-    **Nota:**
-    - Assicurati che Ollama sia in esecuzione localmente.
-    - Configura l'endpoint e il modello nelle variabili d'ambiente.            
+    Questo sistema utilizza un **agent RAG** (Retrieval-Augmented Generation) per verificare le notizie:
+    
+    1. **Retrieval**: cerca documenti rilevanti nel database
+    2. **Embedding**: calcola similarità semantica
+    3. **LLM Analysis**: il modello analizza fonti e genera verdetto
+    
+    **Requisiti:**
+    - Agent backend in esecuzione
+    - Database MongoDB popolato
+    - Ollama attivo con il modello configurato
     """)
-
+    
     st.markdown("---")
     st.markdown("Sviluppato da **Giovanni Di Stazio** e **Pasquale Criscuolo** - [GitHub](https://github.com/Paki64/Explainable-Fact-Checker)")

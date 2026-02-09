@@ -9,7 +9,8 @@ mongodb_auth_db: "admin"
 # Configurazione dei modelli
 embeddings_model: "Paki64/nomic-embed-text-v2-moe:16k"
 llm_model: "llama3.2:3B"
-ollama_api_endpoint: "http://localhost:11434/api/generate"
+ollama_api_endpoint: "localhost:11434/api/generate"
+agent_api_endpoint: "http://localhost:8000/api/fact-check"
 
 # Variabili di caricamento dei documenti e suddivisione in chunk
 file_path: "./datasets"
