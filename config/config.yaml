@@ -1,4 +1,4 @@
-#MongoDB configuration
+# Configurazione MongoDB
 mongodb_uri: "mongodb://localhost:27017"
 mongodb_db: "fact_checker"
 mongodb_collection: "embeddings"
@@ -6,12 +6,18 @@ mongodb_username: "FC-DB-ADMIN"
 mongodb_password: "CHANGE-ME-ADMIN"
 mongodb_auth_db: "admin" 
 
-# Model configuration
-embeddings_model: "nomic-embed-text-v2-moe"
+# Configurazione dei modelli
+embeddings_model: "Paki64/nomic-embed-text-v2-moe:16k"
 llm_model: "llama3.2:3B"
 ollama_api_endpoint: "http://localhost:11434/api/generate"
 
-# Document loader and chunking configuration
+# Variabili di caricamento dei documenti e suddivisione in chunk
 file_path: "./datasets"
-chunk_size: 12000
-chunk_overlap: 500
+chunk_size: 12000   # Dimensione dei chunk per i documenti sovradimensionati
+chunk_overlap: 500  # Sovrapposizione tra chunk per mantenere il contesto
+max_size: 3000      # Dimensione massima per i chunk sovradimensionati
+
+# Variabili di configurazione per il processo di fact-checking
+similarity_threshold: 0.35  # Soglia di similarità per considerare un articolo come rilevante
+max_relevant_articles: 10    # Numero massimo di articoli rilevanti da considerare per la risposta
+article_max_length: 2000    # Lunghezza massima del contenuto degli articoli da includere nel prompt
