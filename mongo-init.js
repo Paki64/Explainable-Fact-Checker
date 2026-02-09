@@ -11,9 +11,12 @@ db = db.getSiblingDB('fact_checker');
 db.createCollection('embeddings');
 
 // Index Init
+db.embeddings.createIndex({ "embedding": 1 }, { sparse: true });
+db.embeddings.createIndex({ "metadata.url": 1 });
 db.embeddings.createIndex({ "metadata.source": 1 });
-db.embeddings.createIndex({ "embedding": "text" });
 
 // Logs
 print("Database 'fact_checker' initialized successfully");
 print("Collections created: embeddings");
+print("Indexes created: embedding, metadata.url, metadata.source");
+db.embeddings.createIndex({ "embedding": 1 }, { sparse: true });
