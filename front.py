@@ -15,15 +15,20 @@ st.set_page_config(
 st.title("Explainable-Fact-Checker")
 st.markdown("Inserisci una notizia per verificarne la veridicità")
 
-# Input text area
-news_text = st.text_area(
-    " ",
-    height=150,
-    placeholder="Inserisci qui il testo della notizia..."
-)
+# Form per gestire Command+Enter
+with st.form("fact_check_form"):
+    # Input text area
+    news_text = st.text_area(
+        " ",
+        height=150,
+        placeholder="Inserisci qui il testo della notizia..."
+    )
+    
+    # Submit button
+    submitted = st.form_submit_button("Verifica", type="primary", use_container_width=True)
 
-# Submit button
-if st.button("Verifica", type="primary", use_container_width=True):
+# Gestione submit
+if submitted:
     if not news_text.strip():
         st.warning("⚠️ Inserisci una notizia prima di verificare")
     else:
@@ -106,6 +111,9 @@ with st.sidebar:
     agent_endpoint = config.get("agent_api_endpoint")
     model_name = config.get("llm_model")
     
+    # Estrai la base URL dall'endpoint completo
+    agent_base_url = agent_endpoint.rsplit("/api/", 1)[0] if "/api/" in agent_endpoint else agent_endpoint
+    
     st.markdown("**Endpoint Agent:**")
     st.code(agent_endpoint, language="text")
     
@@ -115,14 +123,14 @@ with st.sidebar:
     # Health check (opzionale ma utile)
     if st.button("🔌 Test Connessione"):
         try:
-            health_response = requests.get(f"{agent_endpoint}/api/health", timeout=5)
+            health_response = requests.get(f"{agent_base_url}/api/health", timeout=5)
             if health_response.status_code == 200:
                 data = health_response.json()
                 st.success(f"✅ Agent attivo - {data.get('num_documents', 0)} documenti in cache")
             else:
                 st.error("❌ Agent non risponde correttamente")
-        except:
-            st.error("❌ Agent non raggiungibile")
+        except Exception as e:
+            st.error(f"❌ Agent non raggiungibile: {str(e)}")
     
     st.markdown("---")
     st.header("ℹ️ Come Funziona")

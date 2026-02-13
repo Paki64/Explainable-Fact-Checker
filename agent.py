@@ -247,38 +247,38 @@ def format_articles_for_llm(relevant_articles, max_content_per_article: int = 10
     return "\n\n" + "="*80 + "\n\n".join(formatted)
 
 
-
-print("\nBenvenuto al fact-checker!")
-while True:
-    print("-------------------------------\n ")
-    question = input("Che cosa vuoi sapere? [Premi invio per uscire]\n")
-    if not question:
-        print("Alla prossima!\n")
-        break
-    
-    print("\nAnalisi in corso...\n")
-    
-    relevant_articles = retrieve_relevant_info(question, min_score=config["similarity_threshold"], top_k=config["max_relevant_articles"])
-    formatted_info = format_articles_for_llm(relevant_articles, max_content_per_article=config["article_max_length"])
-    
-    if not relevant_articles:
-        verdict = "SENZA FONTE" # Verdetto fallback
-        explanation = "Non sono disponibili fonti rilevanti nel database per verificare questa affermazione."
-    else:
-        llm_start = time.time()
-        result = chain.invoke({"info": formatted_info, "question": question})
-        llm_end = time.time()
-        print(f"[TIMING] LLM generation: {llm_end-llm_start:.2f}s")
-        print(f"[TIMING] Context size: {len(formatted_info)} chars")
+if __name__ == "__main__":
+    print("\nBenvenuto al fact-checker!")
+    while True:
+        print("-------------------------------\n ")
+        question = input("Che cosa vuoi sapere? [Premi invio per uscire]\n")
+        if not question:
+            print("Alla prossima!\n")
+            break
         
-        verdict, explanation = parse_model_response(result)
-    
-    if verdict == "SENZA FONTE":
-        print(f"Non ci sono fonti rilevanti per verificare questa affermazione.\n")
-    else:
-        verdict_label = "VERA" if verdict == "VERO" else "FALSA"
-        print(f"La seguente affermazione è {verdict_label}!\n")
-    print(f"{explanation}\n")
-    print(format_sources(relevant_articles))
-    print("\n\n")
+        print("\nAnalisi in corso...\n")
+        
+        relevant_articles = retrieve_relevant_info(question, min_score=config["similarity_threshold"], top_k=config["max_relevant_articles"])
+        formatted_info = format_articles_for_llm(relevant_articles, max_content_per_article=config["article_max_length"])
+        
+        if not relevant_articles:
+            verdict = "SENZA FONTE" # Verdetto fallback
+            explanation = "Non sono disponibili fonti rilevanti nel database per verificare questa affermazione."
+        else:
+            llm_start = time.time()
+            result = chain.invoke({"info": formatted_info, "question": question})
+            llm_end = time.time()
+            print(f"[TIMING] LLM generation: {llm_end-llm_start:.2f}s")
+            print(f"[TIMING] Context size: {len(formatted_info)} chars")
+            
+            verdict, explanation = parse_model_response(result)
+        
+        if verdict == "SENZA FONTE":
+            print(f"Non ci sono fonti rilevanti per verificare questa affermazione.\n")
+        else:
+            verdict_label = "VERA" if verdict == "VERO" else "FALSA"
+            print(f"La seguente affermazione è {verdict_label}!\n")
+        print(f"{explanation}\n")
+        print(format_sources(relevant_articles))
+        print("\n\n")
 

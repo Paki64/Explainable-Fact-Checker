@@ -2,6 +2,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from contextlib import asynccontextmanager
 import time
 
 # Importa le funzioni dal tuo agent.py
@@ -15,7 +16,19 @@ from agent import (
     _EMBEDDINGS_CACHE
 )
 
-app = FastAPI(title="Fact-Checker API", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: carica cache all'avvio del server
+    print("\n" + "="*60)
+    print("[API] Inizializzazione backend...")
+    load_embeddings_cache()
+    print("[API] Backend pronto!")
+    print("="*60 + "\n")
+    yield
+    # Shutdown: cleanup se necessario
+    print("\n[API] Shutdown backend...")
+
+app = FastAPI(title="Fact-Checker API", version="1.0.0", lifespan=lifespan)
 
 # CORS per permettere richieste da Streamlit
 app.add_middleware(
@@ -39,15 +52,6 @@ class FactCheckResponse(BaseModel):
     explanation: str
     sources: list[Source]
     processing_time: float
-
-# Carica cache all'avvio del server
-@app.on_event("startup")
-async def startup_event():
-    print("\n" + "="*60)
-    print("[API] Inizializzazione backend...")
-    load_embeddings_cache()
-    print("[API] Backend pronto!")
-    print("="*60 + "\n")
 
 @app.get("/")
 async def root():
