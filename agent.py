@@ -3,6 +3,7 @@ import re
 import time
 import yaml
 import numpy as np
+from tqdm import tqdm
 from langchain_ollama.llms import OllamaLLM
 from langchain_ollama import OllamaEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
@@ -29,29 +30,29 @@ def load_embeddings_cache():
     # Connessione al database e caricamento degli embeddings
     print("[INIT] Connessione al DB in corso...")
     collection = db_connect()
+    
+    # Conta documenti per pre-allocazione
+    total_docs = collection.count_documents({})
+    print(f"[INIT] Trovati {total_docs:,} documenti nel DB")
     print("[INIT] Caricamento embeddings in memoria...")
+    
     cursor = collection.find({}, {"embedding": 1, "_id": 1})
     
     doc_ids = []
     embeddings_list = []
     
-    # Iterazione sui documenti per estrarre gli embeddings e gli ID
-    for doc in cursor:
+    # Iterazione sui documenti con progress tracking
+    for doc in tqdm(cursor, total=total_docs, desc="[INIT] Caricamento embeddings", unit=" docs"):
         if "embedding" in doc:
             doc_ids.append(doc["_id"])
-            # [HACK] Conversione degli embeddings da int8 a float32
+            # Mantiene gli embeddings in int8 per risparmiare memoria (4x meno spazio)
             emb_int8 = np.array(doc["embedding"], dtype=np.int8)
-            emb_float = emb_int8.astype(np.float32) / 127.0
-            embeddings_list.append(emb_float.tolist())
+            embeddings_list.append(emb_int8)
     
-    # Conversione in matrice NumPy
-    embeddings_matrix = np.array(embeddings_list, dtype=np.float32)
-    
-    # Libera memoria 
-    del embeddings_list # Lista originale non più necessaria
-    import gc           # Garbage collector
-    gc.collect()
-    
+    # Conversione in matrice NumPy (mantiene int8)
+    print("[INIT] Conversione in matrice NumPy...")
+    embeddings_matrix = np.array(embeddings_list, dtype=np.int8)
+        
     # Debug: controlla dimensioni
     num_docs = len(doc_ids)
     memory_mb = embeddings_matrix.nbytes / (1024 * 1024)
@@ -66,6 +67,11 @@ def load_embeddings_cache():
     t1 = time.time()
     print(f"[INIT] Cache pronta: {num_docs} embeddings in {t1-t0:.2f}s (~{memory_mb:.0f} MB RAM)")
     
+    # Libera memoria 
+    del embeddings_list # Lista originale non più necessaria
+    import gc           # Garbage collector
+    gc.collect()
+
     return _EMBEDDINGS_CACHE
 
 
@@ -96,31 +102,49 @@ def retrieve_relevant_info(question: str, min_score: float = 0.35, top_k: int = 
     
     # Calcolo vettorizzato di tutte le similarità
     t2 = time.time()
-    query_vec = np.array(query_embedding)
+    
+    # Conversione da int8 a float32 solo per il calcolo (non mantiene in memoria)
+    embeddings_float = embeddings_matrix.astype(np.float32) / 127.0
+    query_vec = np.array(query_embedding, dtype=np.float32)
     
     # Similarità coseno vettorizzata
-    norms = np.linalg.norm(embeddings_matrix, axis=1)
-    similarities = np.dot(embeddings_matrix, query_vec) / (norms * np.linalg.norm(query_vec))
+    norms = np.linalg.norm(embeddings_float, axis=1)
+    similarities = np.dot(embeddings_float, query_vec) / (norms * np.linalg.norm(query_vec))
+    
+    # Libera la conversione temporanea
+    del embeddings_float
     
     t3 = time.time()
     print(f"[TIMING] Computed {len(similarities)} similarities: {t3-t2:.2f}s")
     
-    # Retrieving dei documenti più pertinenti
-    top_indices = np.argsort(similarities)[::-1][:top_k * 3]
-    top_doc_ids = [doc_ids[i] for i in top_indices if similarities[i] >= min_score][:top_k]
-    
+    # Seleziona più candidati (per gestire possibili URL duplicati) e poi riduci a top_k unici
+    sorted_indices = np.argsort(similarities)[::-1]
+    candidate_indices = [i for i in sorted_indices if similarities[i] >= min_score][: top_k * 3]
+
     # Caricamento dei documenti corrispondenti dal DB
     t4 = time.time()
-    results = []
-    for doc_id in top_doc_ids:
+    candidates = []
+    for idx in candidate_indices:
+        doc_id = doc_ids[idx]
         doc = collection.find_one({"_id": doc_id}, {"content": 1, "metadata": 1})
         if doc:
-            idx = doc_ids.index(doc_id)
-            results.append({
-                "content": doc["content"],
+            candidates.append({
+                "content": doc.get("content", ""),
                 "relevance_score": round(float(similarities[idx]), 4),
                 "metadata": doc.get("metadata", {})
             })
+
+    # De-duplica per URL: mantieni la fonte con relevance_score più alto
+    url_map = {}
+    for cand in candidates:
+        meta = cand.get("metadata", {}) or {}
+        url = meta.get("url") or "N/A"
+        if url not in url_map or cand.get("relevance_score", 0) > url_map[url].get("relevance_score", 0):
+            url_map[url] = cand
+
+    # Ordina le fonti uniche per rilevanza e limita a top_k
+    unique_results = sorted(url_map.values(), key=lambda x: x.get("relevance_score", 0), reverse=True)[:top_k]
+    results = unique_results
     
     t5 = time.time()
     print(f"[TIMING] Fetched {len(results)} full documents: {t5-t4:.2f}s")
@@ -146,29 +170,18 @@ def format_sources(relevant_articles):
     if not relevant_articles:
         lines.append("Nessuna fonte rilevante trovata.")
         return "\n".join(lines)
-
-    # [HACK] Gestione degli URL duplicati mantenendo solo quello con il punteggio di rilevanza più alto
-    url_map = {}
-    for article in relevant_articles:
-        metadata = article.get("metadata", {})
-        url = metadata.get("url", "N/A")
-        relevance_score = article.get("relevance_score", 0)
-        
-        if url not in url_map or relevance_score > url_map[url]["relevance_score"]:
-            url_map[url] = {"url": url, "relevance_score": relevance_score}
-    
-    # Ordinamento per punteggio di rilevanza decrescente
-    unique_sources = sorted(url_map.values(), key=lambda x: x["relevance_score"], reverse=True)
     
     # Stampa delle fonti con punteggio di rilevanza
-    for i, source in enumerate(unique_sources, start=1):
-        lines.append(f"{i}. URL: {source['url']}")
-        percentage = source['relevance_score'] * 100
+    for i, article in enumerate(relevant_articles, start=1):
+        metadata = article.get("metadata", {})
+        url = metadata.get("url", "N/A")
+        lines.append(f"{i}. URL: {url}")
+        percentage = article.get("relevance_score", 0) * 100
         lines.append(f"   Relevance Score: {percentage:.2f}%")
     return "\n".join(lines)
 
 
-# [TODO: Verificare serva] Pulizia del testo 
+# Pulizia del testo 
 def clean_text(text):
     text = text.replace("\\&quot;", '"').replace("&quot;", '"')
     text = text.replace("\\n", " ").replace("\\t", " ")

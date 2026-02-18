@@ -4,6 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from contextlib import asynccontextmanager
 import time
+import traceback
 
 # Importa le funzioni dal tuo agent.py
 from agent import (
@@ -118,8 +119,10 @@ async def fact_check(request: FactCheckRequest):
         )
         
     except Exception as e:
+        # Log completo per facilitare il debugging
+        traceback.print_exc()
         raise HTTPException(
-            status_code=500, 
+            status_code=500,
             detail=f"Errore durante l'elaborazione: {str(e)}"
         )
 
