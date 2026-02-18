@@ -11,7 +11,7 @@ services:
       - mongodb_data:/data/db
       - mongodb_config:/data/configdb
       - ./mongo-init.js:/docker-entrypoint-initdb.d/init.js
-    command: mongod --bind_ip 0.0.0.0 --auth
+    command: mongod --bind_ip 0.0.0.0 --auth --wiredTigerCacheSizeGB 1
     healthcheck:
       test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
       interval: 10s
@@ -20,6 +20,7 @@ services:
       start_period: 20s
     networks:
       - fact_checker_network
+    mem_limit: 1024m
 
   mongo-express:
     image: mongo-express:latest
