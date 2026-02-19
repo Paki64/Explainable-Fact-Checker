@@ -141,7 +141,7 @@ def create_vector(chunks):
     embeddings = OllamaEmbeddings(model=config["embeddings_model"])
     collection = db_connect()
     
-    # Gestione dei chunks troppo grandi
+    # Gestione dei chunks troppo grandi (size più piccola definita da max_size)
     def _split_oversized_chunk(text: str, metadata: dict) -> list[Document]:
         max_size = config["max_size"] 
         if len(text) <= max_size:
