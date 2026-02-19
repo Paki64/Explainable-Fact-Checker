@@ -20,5 +20,5 @@ max_size: 3000      # Dimensione massima per i chunk sovradimensionati
 
 # Variabili di configurazione per il processo di fact-checking
 similarity_threshold: 0.35  # Soglia di similarità per considerare un articolo come rilevante
-max_relevant_articles: 10    # Numero massimo di articoli rilevanti da considerare per la risposta
+max_relevant_articles: 20   # Numero massimo di articoli rilevanti da considerare per la risposta
 article_max_length: 2000    # Lunghezza massima del contenuto degli articoli da includere nel prompt
