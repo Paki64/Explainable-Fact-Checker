@@ -34,7 +34,7 @@ app = FastAPI(title="Fact-Checker API", version="1.0.0", lifespan=lifespan)
 # CORS per permettere richieste da Streamlit
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # In produzione: ["http://frontend:8501"]
+    allow_origins=["*"],  #  ["http://frontend:8501"]
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

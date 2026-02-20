@@ -32,7 +32,7 @@ if submitted:
     if not news_text.strip():
         st.warning("⚠️ Inserisci una notizia prima di verificare")
     else:
-        # ✅ Chiama il TUO agent (non Ollama direttamente)
+        # Chiama il TUO agent (non Ollama direttamente)
         agent_url = config.get("agent_api_endpoint")
         
         with st.spinner("🔍 Verifico la notizia..."):
