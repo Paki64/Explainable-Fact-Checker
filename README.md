@@ -1,5 +1,7 @@
 # Explainable-Fact-Checker
 
+## REQUISITI
+
 
 ## EMBEDDINGS
 
